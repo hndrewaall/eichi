@@ -92,6 +92,29 @@ if not EICHI_DB:
 # for a custom brand; defaults to a neutral "eichi search".
 SITE_TITLE = os.environ.get("SEARCH_SITE_TITLE", "eichi search")
 
+# Whitelabel branding hooks. All default to empty strings; the template
+# renders cleanly with or without each one set. A deployer overrides
+# them via env (typically through an env_file mounted on the container).
+#
+#   SEARCH_SITE_LOGO_URL    — header logo image URL. Empty = no logo
+#                             rendered. May be an absolute URL or a
+#                             relative path (e.g. /static/foo.png).
+#                             When unset, falls back to the bundled
+#                             default at /static/eichi-logo.png if
+#                             ``SEARCH_SITE_LOGO_DEFAULT=1`` is set.
+#   SEARCH_SITE_BRAND       — short brand string rendered in the
+#                             footer. Empty = no brand text.
+#   SEARCH_SITE_FAVICON_URL — favicon override. Empty = use the
+#                             bundled generic favicon.
+SITE_LOGO_URL = os.environ.get("SEARCH_SITE_LOGO_URL", "").strip()
+SITE_BRAND = os.environ.get("SEARCH_SITE_BRAND", "").strip()
+SITE_FAVICON_URL = os.environ.get("SEARCH_SITE_FAVICON_URL", "").strip()
+SITE_LOGO_DEFAULT = os.environ.get("SEARCH_SITE_LOGO_DEFAULT", "").strip() in (
+    "1",
+    "true",
+    "yes",
+)
+
 DEFAULT_K = int(os.environ.get("SEARCH_DEFAULT_K", "20"))
 MAX_K = int(os.environ.get("SEARCH_MAX_K", "100"))
 MAX_QUERY_LEN = int(os.environ.get("SEARCH_MAX_QUERY_LEN", "500"))
@@ -895,6 +918,10 @@ def index() -> str:
     return render_template(
         "index.html",
         site_title=SITE_TITLE,
+        site_logo_url=SITE_LOGO_URL,
+        site_logo_default=SITE_LOGO_DEFAULT,
+        site_brand=SITE_BRAND,
+        site_favicon_url=SITE_FAVICON_URL,
         user=request.headers.get("X-Auth-Request-Email", ""),
         default_k=DEFAULT_K,
         max_k=MAX_K,

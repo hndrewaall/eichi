@@ -7,13 +7,17 @@
   <meta name="theme-color" content="#fdf6e3" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#002b36" media="(prefers-color-scheme: dark)">
   <title>{{ site_title }}</title>
+  {% if site_favicon_url %}
+  <link rel="shortcut icon" href="{{ site_favicon_url }}">
+  <link rel="icon" href="{{ site_favicon_url }}">
+  {% else %}
   <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
   <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
   <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon-192x192.png') }}">
   <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon-512x512.png') }}">
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  {% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   {# morphdom — vendored DOM diff/merge library used by search.js to
      update the result list without flicker as the user types. #}
@@ -21,7 +25,14 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="title"><img src="{{ url_for('static', filename='logo.svg') }}" alt="" class="logo"> {{ site_title }}</div>
+    <div class="title">
+      {% if site_logo_url %}
+        <img src="{{ site_logo_url }}" alt="" class="logo">
+      {% elif site_logo_default %}
+        <img src="{{ url_for('static', filename='eichi-logo.png') }}" alt="" class="logo">
+      {% endif %}
+      {{ site_title }}
+    </div>
     <div class="meta" id="topbar-meta">
       <span id="result-count" class="count count-info" title="results returned">— results</span>
       <span id="elapsed" class="ts" title="server-side query elapsed">—</span>
@@ -125,6 +136,10 @@
     <span><a href="/api/search?q=test">json</a></span>
     <span class="sep">·</span>
     <span>eichi · sqlite-vec · {{ embedding_model }}</span>
+    {% if site_brand %}
+    <span class="sep">·</span>
+    <span class="brand">{{ site_brand }}</span>
+    {% endif %}
   </footer>
 
   <script src="{{ url_for('static', filename='local-time.js') }}" defer></script>
