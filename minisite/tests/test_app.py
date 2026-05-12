@@ -22,6 +22,51 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app as search_app  # noqa: E402
 
 
+# Generic, service-agnostic source ids used throughout the test suite.
+# The minisite is service-agnostic by design — connector-stamped source
+# tags are opaque tokens, so the test fixtures use clearly synthetic
+# names rather than any specific homelab service vocabulary.
+_FIXTURE_PUBLIC_SOURCES = {
+    "calibre",
+    "test-public-a",
+    "test-public-b",
+    "test-public-c",
+    "test-public-d",
+}
+_FIXTURE_PRIVATE_SOURCES = {
+    "signal-chat",
+    "obsidian",
+    "repo-md",
+    "queue-logs",
+    "memory",
+    "test-private-a",
+}
+_FIXTURE_ALL_SOURCES = _FIXTURE_PUBLIC_SOURCES | _FIXTURE_PRIVATE_SOURCES
+_FIXTURE_SOURCES_BY_ROLE = {
+    "admin": {"*"},
+    "search-user": set(_FIXTURE_PUBLIC_SOURCES),
+}
+
+
+@pytest.fixture(autouse=True)
+def _install_fixture_source_map(monkeypatch):
+    """Stamp a known source-map onto the module for every test.
+
+    The minisite reads ``ALL_SOURCES`` / ``SOURCES_BY_ROLE`` from a
+    local TOML config (``eichi.sources``). Tests should not depend on
+    whatever file may exist on the developer's machine — install a
+    known fixture set instead. Individual tests still
+    ``monkeypatch.setattr`` for narrower variants.
+    """
+    monkeypatch.setattr(search_app, "ALL_SOURCES", set(_FIXTURE_ALL_SOURCES))
+    monkeypatch.setattr(
+        search_app,
+        "SOURCES_BY_ROLE",
+        {role: set(srcs) for role, srcs in _FIXTURE_SOURCES_BY_ROLE.items()},
+    )
+    monkeypatch.setattr(search_app, "ALLOWED_SOURCES", set(_FIXTURE_ALL_SOURCES))
+
+
 @pytest.fixture
 def client(monkeypatch):
     """Flask test client with a stubbed eichi backend."""
@@ -979,21 +1024,13 @@ def test_index_template_renders_embedding_model(client, monkeypatch):
 # ----------------------------------------------------------------------
 
 
-PRIVATE_SOURCES = {
-    "signal-chat",
-    "obsidian",
-    "repo-md",
-    "queue-logs",
-    "memory",
-    "embiguity-requests",
-}
-SEARCH_USER_SOURCES = {
-    "calibre",
-    "embiguity-content",
-    "kavita",
-    "navidrome-albums",
-    "navidrome-artists",
-}
+# Synthetic source ids — the restricted-access tests pin source-id
+# vocabulary against the fixture set installed by the autouse
+# ``_install_fixture_source_map`` hook above so the assertions stay
+# meaningful regardless of which connectors a developer has wired up
+# locally.
+PRIVATE_SOURCES = set(_FIXTURE_PRIVATE_SOURCES)
+SEARCH_USER_SOURCES = set(_FIXTURE_PUBLIC_SOURCES)
 
 
 def _spy_run_search(monkeypatch, captured):

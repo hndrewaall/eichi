@@ -1,0 +1,86 @@
+# eichi sources.toml — local source-map configuration.
+#
+# Copy to one of:
+#   - $EICHI_SOURCES_CONFIG (any path you point the env var at)
+#   - $XDG_CONFIG_HOME/eichi/sources.toml
+#   - ~/.config/eichi/sources.toml
+#
+# The file is OPTIONAL. Without it eichi still boots; the minisite's
+# ``ALL_SOURCES`` is empty (the admin wildcard expands to nothing) and
+# every source tag renders neutrally (label = literal source id, no
+# outbound link). Drop this file once you have a connector running.
+#
+# Two sections:
+#
+#   [roles.<role>]
+#       Per-role source allowlist. The minisite reads the auth gate's
+#       ``X-Auth-Role`` header and looks up the role here. Unknown roles
+#       → empty allowlist (deny everything). The literal ``"*"`` token
+#       expands to every key in [sources] at request time.
+#
+#   [sources.<source_id>]
+#       Display surface for one connector-stamped source tag.
+#       ``label`` is required; everything else is optional.
+#
+# URL templating
+# --------------
+# The ``url`` field may contain two substitution tokens:
+#
+#   {doc_id}         — the full doc id as stamped by the connector
+#                      (the result row's ``path`` column).
+#   {doc_id_suffix}  — same, but with the leading "<source_id>:" prefix
+#                      stripped when present. Useful when a connector
+#                      encodes an external id as e.g.
+#                      ``music-album:5f3a-...`` and you want the URL
+#                      to receive just ``5f3a-...``.
+
+
+# ---------------------------------------------------------------------
+# Per-role allowlists
+# ---------------------------------------------------------------------
+[roles]
+# Wildcard — every source declared under [sources] below is reachable
+# by admin.
+admin = ["*"]
+
+# Default web user role — restricted to the public-facing source ids
+# (audio + video library deep-links). Add or remove ids here to control
+# what an authenticated reader can pick from the source filter.
+"search-user" = [
+    "video-content",
+    "music-album",
+    "book-series",
+]
+
+
+# ---------------------------------------------------------------------
+# Per-source display rendering
+# ---------------------------------------------------------------------
+
+# Example: a video library connector. Doc ids in the index look like
+# ``video-content:show:42`` or ``video-content:movie:7``; the URL
+# template strips the ``video-content:`` prefix so the deep link
+# receives just ``show:42``.
+[sources.video-content]
+label = "Video Library"
+url = "http://example.com/video/{doc_id_suffix}"
+badge_color = "#cb4b16"      # orange
+
+# Example: a music library connector. Doc ids are bare album ids; we
+# substitute the full doc id verbatim.
+[sources.music-album]
+label = "Music Library"
+url = "http://example.com/album/{doc_id}"
+badge_color = "#859900"      # green
+
+# Example: a book / comic library connector.
+[sources.book-series]
+label = "Book Library"
+url = "http://example.com/series/{doc_id_suffix}"
+badge_color = "#d33682"      # magenta
+
+# Example: a private connector with no outbound URL. The badge still
+# renders (label + colour) but the result path stays inert.
+[sources.team-notes]
+label = "Team Notes"
+badge_color = "#268bd2"      # blue
