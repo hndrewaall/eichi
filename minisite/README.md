@@ -13,6 +13,34 @@ headers for display + per-role source authorisation. The upstream gate
 is responsible for setting them honestly. Don't bind to a public IP
 without a gate.
 
+## Container is web-only — no CLI inside
+
+This container ships gunicorn + the Flask app + the Python deps needed
+to load the embedding model for query-time lookups. It does **not**
+include the `eichi` CLI wrapper. Commands like
+
+```bash
+docker compose exec eichi-search eichi --version   # WON'T WORK
+docker compose exec eichi-search eichi index ...   # WON'T WORK
+```
+
+will fail — there is no `eichi` binary on `$PATH` inside the container.
+This is intentional: the container is a read-only web surface; the
+host-side CLI owns indexing + admin. For any CLI operation (version
+probe, indexing, stats, removals) run the wrapper at the repo root on
+the host:
+
+```bash
+cd /path/to/eichi
+./bin/eichi --version
+./bin/eichi index ~/Documents/notes
+./bin/eichi stats
+```
+
+Both surfaces share one SQLite index DB (the container bind-mounts it
+read-write so the worker can open it, but only the host CLI writes to
+it).
+
 ## Run
 
 Easiest from the repo root via the Makefile:

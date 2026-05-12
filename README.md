@@ -11,6 +11,28 @@ top-K hits in roughly 30 ms.
 
 The name (Japanese 叡智, *eichi*) means "wisdom".
 
+## CLI vs web — two surfaces, one index
+
+eichi ships two interfaces backed by the same SQLite index:
+
+- **`bin/eichi`** — host-side CLI. Runs against a local Python venv at
+  `.venv/` (created by `uv venv --python 3.11 && uv pip install -e .`).
+  Used for indexing (`eichi index <path>`, `eichi index-stream`,
+  `eichi index --corpus <name>`), one-shot queries (`eichi query '…'`),
+  and admin (`stats`, `ls`, `rm`, `reindex`). The version probe
+  `eichi --version` works without the venv bootstrapped.
+- **`minisite/`** — Flask web UI in a Docker container
+  (`minisite/Dockerfile`, served via gunicorn). Reads the same sqlite-vec
+  index DB the CLI writes, via a bind-mount. The container ships only
+  the web app + Python deps for embedding lookups — **there is no
+  `eichi` CLI installed inside the container by design**. Use the
+  host-side CLI for indexing / admin; the container only serves
+  read-only queries.
+
+So `docker compose exec eichi-search eichi --version` will NOT work —
+the binary isn't in the container. Run `./bin/eichi --version` on the
+host instead.
+
 ## Features
 
 - **Hybrid retrieval**: vec0 KNN union FTS5 BM25, fused via Reciprocal Rank

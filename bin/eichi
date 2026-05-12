@@ -14,6 +14,24 @@ done
 script_dir="$(cd -P "$(dirname "$src")" && pwd)"
 repo_root="$(cd -P "$script_dir/.." && pwd)"
 
+# Fast-path: `eichi --version` should work even without the venv bootstrapped
+# (e.g. fresh-laptop smoke tests, deploy guides). Read __version__ straight
+# out of the source. Exec'ing the python entrypoint still works once the venv
+# is in place — argparse has its own --version action wired up — so this is
+# purely a no-deps shortcut. Only intercept when --version is the SOLE arg
+# (so e.g. `eichi index --version` still flows through argparse).
+if [ "$#" -eq 1 ] && { [ "$1" = "--version" ] || [ "$1" = "-V" ]; }; then
+  init_py="$repo_root/src/eichi/__init__.py"
+  if [ -r "$init_py" ]; then
+    ver="$(grep -E '^__version__\s*=' "$init_py" | head -1 | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/')"
+    if [ -n "$ver" ]; then
+      echo "eichi $ver"
+      exit 0
+    fi
+  fi
+  # Fall through to the venv path if we couldn't parse it.
+fi
+
 VENV_PY="$repo_root/.venv/bin/python"
 if [ ! -x "$VENV_PY" ]; then
   echo "eichi: venv missing at $VENV_PY — run: uv venv --python 3.11 \"$repo_root/.venv\" && uv pip install -p \"$VENV_PY\" -e \"$repo_root\"" >&2
