@@ -89,7 +89,9 @@ Other environment variables:
 
 A small Flask app under [`minisite/`](./minisite/) wraps `eichi query`
 for use behind a reverse proxy. It is fully whitelabel-able through
-environment variables — the public build ships generic defaults.
+environment variables — the public build ships generic defaults. Full
+walkthrough including standalone-run, pre-flight indexing, and per-env-var
+defaults: [`minisite/README.md`](./minisite/README.md).
 
 | Var | Default | Meaning |
 |-----|---------|---------|
@@ -162,11 +164,22 @@ download of the embedding model on first use (after which
 metrics exporter; the file never leaves the machine and can be disabled
 with `EICHI_NO_QUERY_LOG=1`.
 
+## Agent onboarding
+
+Agent-instruction files at the repo root (`CLAUDE.md`, `AGENTS.md`,
+`.cursorrules`, `.github/copilot-instructions.md`) all point to a single
+canonical source: [`CLAUDE.md`](./CLAUDE.md). Drop a coding agent
+(Claude Code, Copilot Agent, Cursor, Aider, etc.) in this repo and it
+will know the install + dev-loop conventions without further setup.
+
 ## Tests
 
 ```sh
 .venv/bin/python -m pytest tests/ -v
 ```
+
+Or `make test` from the repo root once `make install` has bootstrapped
+the venv.
 
 ## Acknowledgments
 
