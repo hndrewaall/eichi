@@ -14,11 +14,10 @@
 // decoded). We HTML-escape and bold-highlight any token from the query
 // that appears in the snippet (case-insensitive, word-boundary).
 //
-// Source-specific link generation: deep links are computed server-side
-// (the `app_link` field in the JSON envelope) for the connector types
-// whose `*_BASE_URL` envs are configured. Everything else renders the
-// path as plain text — adding a new public source surface is a server-side
-// change in app.py's `_build_deep_link`.
+// Result paths render as plain text by default. The card stays
+// inert apart from in-app interactions (open in a new tab, expand a
+// snippet, etc.) — adding a clickable deep-link surface for a new
+// source connector is an out-of-scope extension.
 
 (function () {
   'use strict';
@@ -88,34 +87,15 @@
   }
 
   // ---------------------------------------------------------------------
-  // Source → optional outbound link. Some sources have a public
-  // user-facing URL; others (signal-chat, obsidian) are private and we
-  // intentionally render the path as plain text with no link.
-  //
-  // For sources that have a backend-computed deep link (Emby / Kavita /
-  // Navidrome album+artist via /__sso/<svc>?next=...), prefer that link
-  // — it's a real cross-origin navigation that the SSO bridges honor and
-  // primes the target service's session before redirecting to the deep
-  // resource page. Without this, only the small "Open in <App>" pill is
-  // clickable; the path text is a non-interactive span and clicks go
-  // nowhere (q-2026-05-04-26d6).
+  // Source → optional outbound link. The default ships with no outbound
+  // links — every result path renders as plain text. Add a per-source
+  // case below if you want a particular connector's rows to become
+  // clickable (e.g. a public URL derived from the path).
   // ---------------------------------------------------------------------
   function linkFor(result) {
-    const src = (result.source || '').toLowerCase();
     const p = result.path || '';
     if (!p) return null;
-    // Backend-computed deep link wins. Covers embiguity-content (Emby),
-    // navidrome-albums/artists (Navidrome), kavita (Kavita).
-    if (result.app_link) {
-      return result.app_link;
-    }
-    if (src === 'repo-md' || src === 'repo_md') {
-      // Path is a relative markdown filepath. No public URL — return
-      // null so we render as plain text. (Public-facing UI rule:
-      // never leak private filesystem paths as links.)
-      return null;
-    }
-    // Everything else: no public link.
+    // No public link in the default build.
     return null;
   }
 
@@ -277,14 +257,11 @@
   }
 
   // ---------------------------------------------------------------------
-  // Deep-link button — "Open in <App>" pill rendered alongside the path
-  // when the backend has computed an app_link (q-2026-05-03-db00).
-  // Categories with deep links:
-  //   * embiguity-content (show / movie / episode) → Emby
-  //   * navidrome-albums / navidrome-artists       → Navidrome
-  //   * kavita                                     → Kavita
-  // Calibre, signal-chat, obsidian, etc. intentionally omit (no
-  // public-facing app surface).
+  // Deep-link button stub. The default build never emits an
+  // ``app_link`` / ``app_label`` in the JSON envelope, so this always
+  // returns an empty string. Kept as an extension point so downstream
+  // forks can wire connector-specific "Open in <App>" pills without
+  // rewriting the card renderer.
   // ---------------------------------------------------------------------
   function appLinkHtml(result) {
     const url = result.app_link;

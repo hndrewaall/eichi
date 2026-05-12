@@ -52,7 +52,8 @@ def test_pick_prefers_mtime_over_indexed():
 
 
 def test_pick_falls_back_to_indexed_when_mtime_zero():
-    """navidrome-artists style: upstream timestamp absent, ingest time present."""
+    """connector-without-mtime style: upstream timestamp absent, ingest
+    time present. ``_pick_hit_timestamp`` must surface the ingest time."""
     h = _hit(mtime=0.0, indexed_at_unix=1_777_000_000.0)
     ts, kind = _pick_hit_timestamp(h)
     assert ts == 1_777_000_000.0
@@ -149,8 +150,8 @@ def test_print_hit_json_carries_date_aware_fields():
     h = SearchHit(
         rowid=1,
         score=0.42,
-        source="embiguity-content",
-        path="embiguity:content:show:1",
+        source="media-content",
+        path="media:content:show:1",
         chunk_idx=0,
         offset=0,
         text="One Piece",

@@ -125,7 +125,6 @@ defaults: [`minisite/README.md`](./minisite/README.md).
 | `SEARCH_DEFAULT_K` | `20` | Default top-K. |
 | `SEARCH_MAX_K` | `100` | Max top-K accepted via query string. |
 | `SEARCH_QUERY_TIMEOUT` | `30` | Per-query wall-clock cap (seconds). |
-| `EMBY_BASE_URL`, `NAVIDROME_BASE_URL`, `KAVITA_BASE_URL` | *(empty)* | Optional deep-link bases for media-source result rows. Empty = no deep link rendered. |
 
 **Default logo**: `minisite/static/eichi-logo.png` — an OpenAI
 image-gen-generated abstract glyph (white on dark), fair-use safe (no
