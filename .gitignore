@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Secrets (defensive)
+.env
+.env.*
+secrets.toml
+*.key
+*.pem
+credentials.json

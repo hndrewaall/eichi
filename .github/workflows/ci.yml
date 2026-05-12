@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Create venv and install
+        run: |
+          uv venv --python ${{ matrix.python-version }} .venv
+          uv pip install -p .venv/bin/python -e .
+          uv pip install -p .venv/bin/python pytest ruff
+
+      - name: Lint (ruff)
+        run: .venv/bin/ruff check src tests || true
+        # Lint is informational for now; do not fail the build until the
+        # style baseline lands.
+
+      - name: Run tests
+        env:
+          # Tests must never touch HuggingFace — they stub the embedder.
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: |
+          if [ -d tests ] && find tests -name 'test_*.py' -print -quit | grep -q .; then
+            .venv/bin/python -m pytest tests/ -v
+          else
+            echo "no tests yet"
+          fi

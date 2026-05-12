@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#fdf6e3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#002b36" media="(prefers-color-scheme: dark)">
+  <title>{{ site_title }}</title>
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon-192x192.png') }}">
+  <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='favicon-512x512.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {# morphdom — vendored DOM diff/merge library used by search.js to
+     update the result list without flicker as the user types. #}
+  <script src="{{ url_for('static', filename='vendor/morphdom-2.7.4.min.js') }}"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="title"><img src="{{ url_for('static', filename='logo.svg') }}" alt="" class="logo"> {{ site_title }}</div>
+    <div class="meta" id="topbar-meta">
+      <span id="result-count" class="count count-info" title="results returned">— results</span>
+      <span id="elapsed" class="ts" title="server-side query elapsed">—</span>
+    </div>
+  </header>
+
+  <main id="search-root">
+    <form id="search-form" class="search-form" autocomplete="off" onsubmit="return false;">
+      <label class="sr-only" for="search-q">Query</label>
+      <input
+        id="search-q"
+        class="search-input"
+        type="search"
+        placeholder="search memory, notes, transcripts, repo markdown…"
+        aria-label="Search query"
+        autocapitalize="off"
+        autocomplete="off"
+        spellcheck="false"
+        autofocus>
+      <div class="search-controls">
+        <label class="control-label">
+          <span>k</span>
+          <input
+            id="search-k"
+            class="search-k"
+            type="number"
+            min="1"
+            max="{{ max_k }}"
+            value="{{ default_k }}"
+            inputmode="numeric"
+            aria-label="Top-K results">
+        </label>
+        <label class="control-label">
+          <span>source</span>
+          <select id="search-source" class="search-source" aria-label="Source filter">
+            <option value="">any</option>
+            {% for s in allowed_sources %}
+              <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="control-label">
+          <span>year ≥</span>
+          <input
+            id="search-year-min"
+            class="search-year"
+            type="number"
+            min="{{ year_min_floor }}"
+            max="{{ year_max_ceil }}"
+            placeholder="any"
+            inputmode="numeric"
+            aria-label="Minimum release year">
+        </label>
+        <label class="control-label">
+          <span>year ≤</span>
+          <input
+            id="search-year-max"
+            class="search-year"
+            type="number"
+            min="{{ year_min_floor }}"
+            max="{{ year_max_ceil }}"
+            placeholder="any"
+            inputmode="numeric"
+            aria-label="Maximum release year">
+        </label>
+        <label class="control-label">
+          <span>added</span>
+          <select id="search-added-since" class="search-added-since" aria-label="Added-since filter">
+            {% for value, label in allowed_added_since %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="control-label">
+          <span>mode</span>
+          <select id="search-retrieval" class="search-retrieval" aria-label="Retrieval mode">
+            {% for value, label in allowed_retrieval %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+    </form>
+
+    {# Live region for ARIA-polite announcements (hidden visually). #}
+    <div id="status-announce" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
+    <div id="search-banner" class="banner banner-err" hidden></div>
+
+    <section id="results" aria-labelledby="results-label">
+      <h2 id="results-label" class="sr-only">Results</h2>
+      <div id="results-list" class="results-list">
+        <div class="empty-card" id="results-empty">Type a query above to search.</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bottombar">
+    <span>{% if user %}{{ user }}{% else %}—{% endif %}</span>
+    <span class="sep">·</span>
+    <span><a href="/api/search?q=test">json</a></span>
+    <span class="sep">·</span>
+    <span>eichi · sqlite-vec · {{ embedding_model }}</span>
+  </footer>
+
+  <script src="{{ url_for('static', filename='local-time.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='search.js') }}" defer></script>
+</body>
+</html>

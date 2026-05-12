@@ -1,0 +1,41 @@
+# eichi configuration file.
+#
+# Copy to one of:
+#   - $EICHI_CONFIG (any path you point the env var at)
+#   - $XDG_CONFIG_HOME/eichi/eichi.toml
+#   - ~/.config/eichi/eichi.toml
+#
+# The file is OPTIONAL — `eichi index <path>` works without it. The config
+# is useful if you want a single canonical list of corpora to reindex on a
+# schedule (e.g. from cron). A simple wrapper script can iterate over the
+# corpora and call `eichi index` per entry.
+#
+# Each [[corpus]] block declares either:
+#   - a filesystem root (``path = ...``, ``extensions = [...]``), OR
+#   - a built-in connector by ``name = "claude-jsonl"`` or
+#     ``name = "claude-watch-queue"`` — see below.
+
+# Filesystem corpora (walked by `eichi index <path>`).
+[[corpus]]
+name = "notes"
+path = "~/Documents/notes"
+extensions = ["md", "txt"]
+
+[[corpus]]
+name = "code-readmes"
+path = "~/repos"
+extensions = ["md"]
+
+# Claude Code session JSONL transcripts — invoke via
+# `eichi index --corpus claude-jsonl`. Defaults to ~/.claude/projects
+# when no path is set. Set ``path`` to override.
+# [[corpus]]
+# name = "claude-jsonl"
+# path = "~/.claude/projects"
+
+# claude-watch session-task queue items — invoke via
+# `eichi index --corpus claude-watch-queue`. Defaults to
+# ~/.config/session/queue.json. Set ``path`` to override.
+# [[corpus]]
+# name = "claude-watch-queue"
+# path = "~/.config/session/queue.json"

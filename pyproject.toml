@@ -1,0 +1,23 @@
+[project]
+name = "eichi"
+version = "0.4.0"
+description = "Local sqlite-vec + sentence-transformers vector search CLI"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Andrew Hall" }]
+requires-python = ">=3.11"
+dependencies = [
+    "sentence-transformers>=2.2.0",
+    "sqlite-vec>=0.1.0",
+    "numpy>=1.24",
+]
+
+[project.scripts]
+eichi = "eichi.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

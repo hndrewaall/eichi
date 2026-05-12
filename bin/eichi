@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# eichi — thin wrapper that runs the python CLI in the package's venv.
+# Resolves the repo root via this script's own location so symlinks Just Work.
+
+set -euo pipefail
+
+# Resolve symlinks to find the real script directory.
+src="${BASH_SOURCE[0]}"
+while [ -h "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" && pwd)"
+  src="$(readlink "$src")"
+  [[ "$src" != /* ]] && src="$dir/$src"
+done
+script_dir="$(cd -P "$(dirname "$src")" && pwd)"
+repo_root="$(cd -P "$script_dir/.." && pwd)"
+
+VENV_PY="$repo_root/.venv/bin/python"
+if [ ! -x "$VENV_PY" ]; then
+  echo "eichi: venv missing at $VENV_PY — run: uv venv --python 3.11 \"$repo_root/.venv\" && uv pip install -p \"$VENV_PY\" -e \"$repo_root\"" >&2
+  exit 1
+fi
+
+exec "$VENV_PY" -m eichi.cli "$@"
