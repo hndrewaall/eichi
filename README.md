@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="minisite/static/eichi-logo.png" alt="eichi" width="180">
+</p>
+
 # eichi
 
 Local-first semantic search CLI built on [sqlite-vec](https://github.com/asg017/sqlite-vec)
