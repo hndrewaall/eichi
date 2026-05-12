@@ -81,6 +81,29 @@ Other environment variables:
 | `EICHI_CALLER` | Tag the caller (default `cli`). One of `cli|web|agent|mainloop`. |
 | `XDG_DATA_HOME` | Roots the default DB / query-log directory. |
 
+## Web minisite (`minisite/`)
+
+A small Flask app under [`minisite/`](./minisite/) wraps `eichi query`
+for use behind a reverse proxy. It is fully whitelabel-able through
+environment variables — the public build ships generic defaults.
+
+| Var | Default | Meaning |
+|-----|---------|---------|
+| `SEARCH_SITE_TITLE` | `eichi search` | Page `<title>` + header text. |
+| `SEARCH_SITE_LOGO_URL` | *(empty)* | Header logo `<img>` src. Absolute URL or `/static/…` path. Empty = no logo. |
+| `SEARCH_SITE_LOGO_DEFAULT` | *(empty)* | Set to `1` to render the bundled `static/eichi-logo.png` when `SEARCH_SITE_LOGO_URL` is empty. |
+| `SEARCH_SITE_BRAND` | *(empty)* | Optional brand string appended to the footer. |
+| `SEARCH_SITE_FAVICON_URL` | *(empty)* | Favicon override. Empty = use the bundled generic favicon. |
+| `SEARCH_DEFAULT_K` | `20` | Default top-K. |
+| `SEARCH_MAX_K` | `100` | Max top-K accepted via query string. |
+| `SEARCH_QUERY_TIMEOUT` | `30` | Per-query wall-clock cap (seconds). |
+| `EMBY_BASE_URL`, `NAVIDROME_BASE_URL`, `KAVITA_BASE_URL` | *(empty)* | Optional deep-link bases for media-source result rows. Empty = no deep link rendered. |
+
+**Default logo**: `minisite/static/eichi-logo.png` — an OpenAI
+image-gen-generated abstract glyph (white on dark), fair-use safe (no
+third-party brand IP). Opt in via `SEARCH_SITE_LOGO_DEFAULT=1`, or
+ignore and ship your own via `SEARCH_SITE_LOGO_URL`.
+
 ## Supported corpus types
 
 **Today** (built into the core):
