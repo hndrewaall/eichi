@@ -108,8 +108,31 @@ so the public image is whitelabel-able without forking:
 | `SEARCH_DEFAULT_K` | `20` | Default top-K. |
 | `SEARCH_MAX_K` | `100` | Max top-K accepted via query string. |
 | `SEARCH_QUERY_TIMEOUT` | `30` | Per-query wall-clock cap (seconds). |
+| `EICHI_SOURCES_CONFIG` | *(empty)* | Path to the local source-map TOML (see [Source map](#source-map)). |
 
 See [`.env.example`](.env.example) for a template.
+
+## Source map
+
+The minisite is service-agnostic — every per-deployment thing about
+result display (badge label, outbound URL template, badge colour) and
+per-role source authorisation (which connector-stamped tags each role
+may query) lives in a local TOML config, not in the code. Source tags
+stamped by connectors are treated as opaque tokens; the local config
+maps them to display rendering.
+
+Configuration is OPTIONAL. With no config file the minisite boots
+with an empty `ALL_SOURCES` set — the admin role's wildcard expands to
+nothing, and every result row renders neutrally (label = literal
+source id, no outbound link). Drop a config file once you wire up a
+connector.
+
+File resolution: `$EICHI_SOURCES_CONFIG` env override → else
+`$XDG_CONFIG_HOME/eichi/sources.toml` → else
+`~/.config/eichi/sources.toml`. See
+[`examples/sources.example.toml`](../examples/sources.example.toml) at
+the repo root for the schema, including the `{doc_id}` /
+`{doc_id_suffix}` URL-template substitution tokens.
 
 ## Tests
 

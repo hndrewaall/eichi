@@ -125,11 +125,56 @@ defaults: [`minisite/README.md`](./minisite/README.md).
 | `SEARCH_DEFAULT_K` | `20` | Default top-K. |
 | `SEARCH_MAX_K` | `100` | Max top-K accepted via query string. |
 | `SEARCH_QUERY_TIMEOUT` | `30` | Per-query wall-clock cap (seconds). |
+| `EICHI_SOURCES_CONFIG` | *(empty)* | Path to the local source-map TOML. See [Source map](#source-map-configuration) below. |
 
 **Default logo**: `minisite/static/eichi-logo.png` — an OpenAI
 image-gen-generated abstract glyph (white on dark), fair-use safe (no
 third-party brand IP). Opt in via `SEARCH_SITE_LOGO_DEFAULT=1`, or
 ignore and ship your own via `SEARCH_SITE_LOGO_URL`.
+
+### Source map configuration
+
+The minisite is **service-agnostic**: source tags stamped onto results
+by connectors are opaque tokens, and every per-deployment thing (the
+display label of a tag, an optional outbound URL template, the badge
+colour, which roles may query which tags) lives in a local TOML
+config. Nothing inside the public minisite or the eichi package knows
+the names of any specific external service.
+
+The config file is OPTIONAL. Without it the minisite still boots; the
+admin role's wildcard expands to an empty source set and every result
+renders neutrally (label = literal source id, no outbound link).
+
+File resolution (first non-empty wins):
+
+- `$EICHI_SOURCES_CONFIG` (any path you point at)
+- `$XDG_CONFIG_HOME/eichi/sources.toml`
+- `~/.config/eichi/sources.toml`
+
+Schema sketch:
+
+```toml
+[roles]
+admin = ["*"]
+"search-user" = ["video-content", "music-album"]
+
+[sources.video-content]
+label = "Video Library"
+url = "http://example.com/video/{doc_id_suffix}"
+badge_color = "#cb4b16"
+
+[sources.music-album]
+label = "Music Library"
+url = "http://example.com/album/{doc_id}"
+badge_color = "#859900"
+```
+
+`{doc_id}` substitutes the full result `path`; `{doc_id_suffix}` is
+the same but with the leading `<source_id>:` prefix stripped.
+
+Malformed TOML / schema errors raise loudly; a missing file is
+silent. Full schema + examples:
+[`examples/sources.example.toml`](./examples/sources.example.toml).
 
 ## Supported corpus types
 

@@ -63,6 +63,15 @@ from typing import Any
 
 from flask import Flask, jsonify, render_template, request
 
+# Local-config source map: per-source rendering + per-role allowlist.
+# Loaded once at module import; the file is OPTIONAL (defaults to an
+# empty map when absent). Operators populate it with their connectors'
+# source ids; see examples/sources.example.toml.
+try:
+    from eichi import sources as _sources_mod
+except ImportError:  # pragma: no cover — defensive for partial venvs
+    _sources_mod = None  # type: ignore[assignment]
+
 # eichi interpreter + worker script. The interpreter lives in the
 # bind-mounted host venv (see Dockerfile + the docker-compose snippet
 # in the README); the worker script is bundled into the image
@@ -140,45 +149,33 @@ YEAR_MAX_CEIL = 2100
 # defense-in-depth check that keeps junk out of the worker's argv.
 ALLOWED_ADDED_SINCE = {"", "1d", "7d", "30d", "6mo", "1y"}
 
-# Per-role source allowlist. Each role maps to the set of source tags
-# it may query. Source tags are opaque wire-protocol vocabulary emitted
-# by whichever connectors the operator runs against the index — eichi
-# itself treats them as bytes.
+# Per-role source allowlist + the known-source universe. Both are now
+# driven by the LOCAL sources config (see ``eichi.sources``):
 #
-# `admin` carries the `*` wildcard sentinel which expands to every entry
-# in ALL_SOURCES at request time. New connectors added to ALL_SOURCES
-# are admin-only by default — `search-user` gains them only via an
-# explicit add here. This is the default-deny invariant: the burden of
-# proof is on granting access, never on denying it.
-SOURCES_BY_ROLE: dict[str, set[str]] = {
-    "admin": {
-        "*",
-    },
-    "search-user": {
-        "calibre",
-        "embiguity-content",
-        "kavita",
-        "navidrome-albums",
-        "navidrome-artists",
-    },
-}
+#   ALL_SOURCES        — every source id declared under ``[sources]`` in
+#                        the operator's local config. Used as the
+#                        admin-wildcard expansion target AND as input
+#                        validation when a user-supplied ``?source=``
+#                        value is checked against the per-role allowlist.
+#   SOURCES_BY_ROLE    — role → set-of-source-ids. ``"*"`` is a sentinel
+#                        that expands to ALL_SOURCES at request time.
+#
+# These attributes are exposed at module scope so tests can swap them
+# via ``monkeypatch.setattr`` for fixture isolation. The defaults
+# reflect a freshly-deployed eichi instance with no local config —
+# ALL_SOURCES is empty and the only role granted access is ``admin``
+# (via the wildcard, which then expands to the empty set). Drop a
+# ``sources.toml`` to wire your connectors up.
+_SOURCE_MAP = _sources_mod.get_default() if _sources_mod is not None else None
 
-# Every source tag known to the index. Used both as the admin-wildcard
-# expansion target AND as input validation when a user-supplied
-# ?source= value is checked against the per-role allowlist below.
-ALL_SOURCES: set[str] = {
-    "calibre",
-    "embiguity-content",
-    "embiguity-requests",
-    "kavita",
-    "memory",
-    "navidrome-albums",
-    "navidrome-artists",
-    "obsidian",
-    "queue-logs",
-    "repo-md",
-    "signal-chat",
-}
+ALL_SOURCES: set[str] = (
+    set(_SOURCE_MAP.all_sources) if _SOURCE_MAP is not None else set()
+)
+SOURCES_BY_ROLE: dict[str, set[str]] = (
+    {role: set(srcs) for role, srcs in _SOURCE_MAP.roles.items()}
+    if _SOURCE_MAP is not None
+    else {}
+)
 
 
 def sources_for_role(role: str) -> set[str]:
