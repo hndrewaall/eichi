@@ -55,12 +55,10 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sqlite3
 import subprocess
 import threading
 import time
-import urllib.parse
 from typing import Any
 
 from flask import Flask, jsonify, render_template, request
@@ -143,8 +141,9 @@ YEAR_MAX_CEIL = 2100
 ALLOWED_ADDED_SINCE = {"", "1d", "7d", "30d", "6mo", "1y"}
 
 # Per-role source allowlist. Each role maps to the set of source tags
-# it may query.  Replaces the flat ALLOWED_SOURCES set as part of the
-# search-restricted-access rollout — see the design doc s6.
+# it may query. Source tags are opaque wire-protocol vocabulary emitted
+# by whichever connectors the operator runs against the index — eichi
+# itself treats them as bytes.
 #
 # `admin` carries the `*` wildcard sentinel which expands to every entry
 # in ALL_SOURCES at request time. New connectors added to ALL_SOURCES
@@ -161,8 +160,6 @@ SOURCES_BY_ROLE: dict[str, set[str]] = {
         "kavita",
         "navidrome-albums",
         "navidrome-artists",
-        # "grafana-dashboards" — add when that connector lands and is
-        # confirmed safe for non-admin readers.
     },
 }
 
@@ -257,246 +254,6 @@ def _read_embedding_model_label() -> str:
 
 
 EMBEDDING_MODEL_LABEL = _read_embedding_model_label()
-
-
-# ---------------------------------------------------------------------------
-# Deep-link surface
-# ---------------------------------------------------------------------------
-#
-# Each result row gets an "Open in <App>" link when the doc's source maps
-# to a user-facing app whose base URL has been configured via env. The
-# mapping by source:
-#
-#   embiguity-content (show / movie / episode) → Emby
-#       Needs the Emby item id. Stamped into the indexed body by the
-#       embiguity connector under the ``type:`` line as
-#       ``emby_id=<id>``. We look it up from chunk_idx=0 of the matched
-#       doc, parsed below.
-#   navidrome-albums  → Navidrome (album route)
-#   navidrome-artists → Navidrome (artist route)
-#       Both ids are already in the doc_id (path) field, no DB lookup.
-#   kavita            → Kavita (library + series route)
-#       Needs libraryId. Stamped into the indexed body by the kavita
-#       connector under the header as ``library_id=<n>``.
-#
-# Calibre, embiguity-requests, memory, obsidian, queue-logs, repo-md,
-# signal-chat, grafana-dashboards intentionally produce no deep link.
-#
-# Configure the user-facing base URLs via env. UNSET = no deep link
-# rendered for that source. Defaults are intentionally empty so a
-# default-deploy doesn't emit links pointing at someone else's
-# hostnames.
-#
-#   EMBY_BASE_URL
-#   NAVIDROME_BASE_URL
-#   KAVITA_BASE_URL
-
-EMBY_BASE_URL = os.environ.get("EMBY_BASE_URL", "")
-NAVIDROME_BASE_URL = os.environ.get("NAVIDROME_BASE_URL", "")
-KAVITA_BASE_URL = os.environ.get("KAVITA_BASE_URL", "")
-
-# Regex pulled out of the indexed body. Anchored to a line so a stray
-# ``emby_id=`` substring inside an overview blob can't collide.
-_EMBY_ID_RE = re.compile(r"^emby_id=(\S+)$", re.MULTILINE)
-_LIBRARY_ID_RE = re.compile(r"^library_id=(\S+)$", re.MULTILINE)
-
-
-def _fetch_chunk0_metadata(
-    targets: list[tuple[str, str]],
-) -> dict[tuple[str, str], dict[str, str]]:
-    """Batch-fetch chunk_idx=0 text for each (source, path) pair and
-    parse out the deep-link IDs (``emby_id``, ``library_id``).
-
-    Returns ``{(source, path): {"emby_id": ..., "library_id": ...}}``;
-    missing entries imply no IDs were stamped. Errors degrade silently
-    — the deep link just doesn't render. Opens the DB read-only so we
-    don't contend with the worker's writer.
-    """
-    if not targets:
-        return {}
-    # De-dup so the IN clause stays compact even when k=20 includes
-    # multiple chunks of the same path.
-    unique = list({t for t in targets if t[0] and t[1]})
-    if not unique:
-        return {}
-    out: dict[tuple[str, str], dict[str, str]] = {}
-    try:
-        uri = f"file:{EICHI_DB}?mode=ro"
-        conn = sqlite3.connect(uri, uri=True, timeout=2.0)
-        try:
-            # SQLite IN-clause with positional binds. (source, path) pair
-            # match — chunk_idx=0 only (the IDs are stamped near the top
-            # of the doc, which always lands in the first chunk for the
-            # small embiguity / kavita bodies in scope).
-            placeholders = ",".join(["(?, ?)"] * len(unique))
-            params: list[str] = []
-            for src, path in unique:
-                params.append(src)
-                params.append(path)
-            query = (
-                "SELECT source, path, text FROM chunk_meta "
-                f"WHERE (source, path) IN ({placeholders}) AND chunk_idx = 0"
-            )
-            rows = conn.execute(query, params).fetchall()
-        finally:
-            conn.close()
-    except (sqlite3.Error, OSError):
-        return out
-    for src, path, text in rows:
-        ids: dict[str, str] = {}
-        if not isinstance(text, str):
-            continue
-        m = _EMBY_ID_RE.search(text)
-        if m:
-            ids["emby_id"] = m.group(1)
-        m = _LIBRARY_ID_RE.search(text)
-        if m:
-            ids["library_id"] = m.group(1)
-        if ids:
-            out[(src, path)] = ids
-    return out
-
-
-def _sso_deeplink(base_url: str, sso_path: str, target_path: str) -> str:
-    """Wrap an SSO-bridge ``?next=`` payload in a fully-qualified URL.
-
-    The four SSO bridges (emby, navidrome, audiobookshelf, kavita) accept
-    a ``?next=<urlencoded payload>`` query param. When set, the bridge
-    primes the browser session (localStorage + cookies) and redirects
-    to the resolved target instead of the app's home view.
-
-    The shape of ``target_path`` depends on which bridge: path-routed
-    apps (Kavita, Navidrome, Audiobookshelf) take an absolute SPA path
-    starting with ``/`` (e.g. ``/library/1/series/42``); hashbang-routed
-    apps (Emby) take JUST the hashbang fragment payload (e.g.
-    ``details?id=42``), and the bridge prepends ``/web/index.html#!/``
-    server-side. Wrapping a hashbang URL with literal ``#`` in
-    ``target_path`` was the regression q-2026-05-04-3889 — the SPA's
-    hashbang shim rewrote ``#/details`` to ``#!/index.html%23/details``,
-    leaving the user on a blank home view.
-
-    ``target_path`` MAY contain ``?`` / ``=`` / ``&`` and other URL-
-    reserved punctuation — they're percent-encoded so the whole thing
-    fits inside a single query value. ``#`` would be percent-encoded
-    too if a caller passed it, but per the rule above, callers should
-    NOT include ``#`` in the payload — the per-app helpers below
-    enforce this.
-
-    The bridge runs ``_safe_next_path`` server-side: any value that
-    fails its allowlist is rejected and the bridge falls back to its
-    default landing page. So this helper can't be turned into an
-    open-redirect — even if the search index is poisoned, the bridge
-    enforces the same-origin rule.
-    """
-    encoded = urllib.parse.quote(target_path, safe="")
-    return f"{base_url}{sso_path}?next={encoded}"
-
-
-def _build_deep_link(source: str, path: str, ids: dict[str, str]) -> str | None:
-    """Map (source, path, ids) → user-facing app URL.
-
-    Returns None when the source has no public-facing app (calibre,
-    obsidian, signal-chat, etc.), when a required id is missing, OR
-    when the operator hasn't configured a base URL for the target app
-    (``*_BASE_URL`` env unset).
-
-    The link is ALWAYS routed through the matching SSO bridge
-    (``/__sso/<svc>?next=...``) so the browser auto-signs-in via the
-    upstream session cookie and lands on the deep target instead of
-    dropping into the service's native login page when its session
-    cookie has expired.
-    """
-    if not source or not path:
-        return None
-    src = source.lower()
-    if src == "navidrome-albums":
-        if not NAVIDROME_BASE_URL:
-            return None
-        # Doc id format: ``navidrome:album:<id>``. The id IS the
-        # Navidrome subsonic id used by the SPA route.
-        prefix = "navidrome:album:"
-        if not path.startswith(prefix):
-            return None
-        album_id = path[len(prefix):]
-        if not album_id:
-            return None
-        return _sso_deeplink(
-            NAVIDROME_BASE_URL,
-            "/__sso/navidrome",
-            f"/app/#/album/{album_id}/show",
-        )
-    if src == "navidrome-artists":
-        if not NAVIDROME_BASE_URL:
-            return None
-        prefix = "navidrome:artist:"
-        if not path.startswith(prefix):
-            return None
-        artist_id = path[len(prefix):]
-        if not artist_id:
-            return None
-        return _sso_deeplink(
-            NAVIDROME_BASE_URL,
-            "/__sso/navidrome",
-            f"/app/#/artist/{artist_id}/show",
-        )
-    if src == "embiguity-content":
-        if not EMBY_BASE_URL:
-            return None
-        # Show, movie, OR episode all link to the same Emby SPA
-        # hashbang route ``#!/details?id=<emby_id>``. Emby uses
-        # hashbang routing, so the bridge's ``?next=`` takes JUST
-        # the fragment payload (``details?id=<id>``) — no leading
-        # ``#``, no ``/web/index.html`` path prefix. The bridge
-        # prepends ``/web/index.html#!/`` server-side. Earlier
-        # iterations passed the full path-with-fragment shape
-        # (``/web/index.html#/details?id=N``) which the SPA's
-        # hashbang shim rewrote to ``#!/index.html%23/details``,
-        # leaving the user on a blank home view (regression
-        # q-2026-05-04-3889 — Andrew screenshot 2026-05-04 09:03 ET).
-        # Without emby_id (e.g. older indexed row, before the
-        # connector change landed) we degrade silently — no link
-        # rendered.
-        emby_id = ids.get("emby_id")
-        if not emby_id:
-            return None
-        return _sso_deeplink(
-            EMBY_BASE_URL,
-            "/__sso/emby",
-            f"details?id={emby_id}",
-        )
-    if src == "kavita":
-        if not KAVITA_BASE_URL:
-            return None
-        prefix = "kavita:series:"
-        if not path.startswith(prefix):
-            return None
-        series_id = path[len(prefix):]
-        library_id = ids.get("library_id")
-        if not series_id or not library_id:
-            return None
-        return _sso_deeplink(
-            KAVITA_BASE_URL,
-            "/__sso/kavita",
-            f"/library/{library_id}/series/{series_id}",
-        )
-    # Calibre, embiguity-requests, memory, obsidian, queue-logs,
-    # repo-md, signal-chat, grafana-dashboards: no public-facing app.
-    return None
-
-
-def _app_label_for(source: str) -> str | None:
-    """Human-readable app label used by the front-end "Open in X" button.
-
-    Returns None for sources that have no deep-link target.
-    """
-    src = (source or "").lower()
-    if src == "embiguity-content":
-        return "Emby"
-    if src in ("navidrome-albums", "navidrome-artists"):
-        return "Navidrome"
-    if src == "kavita":
-        return "Kavita"
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -775,20 +532,8 @@ def _iso_utc(unix_ts: float | None) -> str | None:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _shape(
-    rec: dict[str, Any],
-    *,
-    deep_link_ids: dict[str, str] | None = None,
-) -> dict[str, Any]:
-    """Normalize a eichi result row for the front-end.
-
-    ``deep_link_ids`` is a per-record dict of stamped IDs (``emby_id``,
-    ``library_id``) extracted from chunk_idx=0 of the matched doc. When
-    present, the shaped row gets ``app_link`` (URL) + ``app_label``
-    (e.g. ``"Emby"``) so the front-end can render an "Open in <App>"
-    button. None / missing IDs degrade to no link rendered — the rest
-    of the result row is unaffected (q-2026-05-03-db00).
-    """
+def _shape(rec: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a eichi result row for the front-end."""
     snippet = rec.get("snippet") or ""
     if len(snippet) > 600:
         snippet = snippet[:600].rstrip() + "…"
@@ -832,11 +577,11 @@ def _shape(
     except (TypeError, ValueError):
         mtime_end = 0.0
     # Date-aware fields. ``library_added_at_unix`` is the unix epoch
-    # for "when this content landed in the library" (Emby DateCreated /
-    # calibre timestamp / navidrome album.created — distinct from
-    # eichi ingest time). ``release_year`` is the canonical release
-    # year for the content. 0 sentinel for unknown/unset; the frontend
-    # must not render a fake date for legacy rows.
+    # for "when this content landed in the upstream library" as
+    # reported by the connector (distinct from eichi's own ingest
+    # time). ``release_year`` is the canonical release year for the
+    # content. 0 sentinel for unknown/unset; the frontend must not
+    # render a fake date for legacy rows.
     try:
         library_added_at_unix = float(rec.get("library_added_at_unix") or 0.0)
     except (TypeError, ValueError):
@@ -893,16 +638,6 @@ def _shape(
         # that pass; integers (1-based rank) when it did.
         "vec_rank": rec.get("vec_rank"),
         "bm25_rank": rec.get("bm25_rank"),
-        # Deep-link surface (q-2026-05-03-db00). NULL when the source
-        # has no public-facing app, or the IDs the app needs aren't
-        # stamped on the indexed body. The front-end renders a button
-        # only when both keys are non-null.
-        "app_link": _build_deep_link(
-            rec.get("source") or "",
-            rec.get("path") or "",
-            deep_link_ids or {},
-        ),
-        "app_label": _app_label_for(rec.get("source") or ""),
     }
 
 
@@ -1117,28 +852,7 @@ def api_search() -> Any:
     )
     elapsed_ms = int((time.monotonic() - started) * 1000)
 
-    # Deep-link enrichment (q-2026-05-03-db00). For embiguity-content
-    # and kavita rows we need the emby_id / library_id stamped in
-    # chunk_idx=0 of the doc. Single batched SELECT keeps the latency
-    # bounded (~few ms even for k=20) and only runs when there's at
-    # least one deep-link-eligible row in the result set.
-    deep_link_targets: list[tuple[str, str]] = []
-    for r in raw_results:
-        src = (r.get("source") or "").lower()
-        if src in ("embiguity-content", "kavita"):
-            path = r.get("path") or ""
-            if path:
-                deep_link_targets.append((src, path))
-    deep_link_ids_by_path = (
-        _fetch_chunk0_metadata(deep_link_targets) if deep_link_targets else {}
-    )
-
-    shaped: list[dict[str, Any]] = []
-    for r in raw_results:
-        ids = deep_link_ids_by_path.get(
-            ((r.get("source") or "").lower(), r.get("path") or "")
-        )
-        shaped.append(_shape(r, deep_link_ids=ids))
+    shaped: list[dict[str, Any]] = [_shape(r) for r in raw_results]
 
     return jsonify(
         {

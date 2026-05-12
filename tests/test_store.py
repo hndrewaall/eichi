@@ -333,8 +333,8 @@ def test_add_chunks_persists_date_aware_fields(db):
     embs = _stub_embeddings(1)
     add_chunks(
         db,
-        source="embiguity-content",
-        path="embiguity:content:show:42",
+        source="media-content",
+        path="media:content:show:42",
         mtime=1_700_000_000.0,
         file_hash="h42",
         chunks=[(0, 0, "Show: One Piece (1999) [Continuing]")],
@@ -358,14 +358,14 @@ def test_search_sort_added_orders_by_library_added_descending(db):
     """
     embs = _stub_embeddings(3)
     paths = [
-        ("embiguity:content:show:1", 1_600_000_000.0, 2010),
-        ("embiguity:content:show:2", 1_750_000_000.0, 2020),  # newest add
-        ("embiguity:content:show:3", 1_700_000_000.0, 2015),
+        ("media:content:show:1", 1_600_000_000.0, 2010),
+        ("media:content:show:2", 1_750_000_000.0, 2020),  # newest add
+        ("media:content:show:3", 1_700_000_000.0, 2015),
     ]
     for i, (p, added, year) in enumerate(paths):
         add_chunks(
             db,
-            source="embiguity-content",
+            source="media-content",
             path=p,
             mtime=1_777_000_000.0,
             file_hash=f"h{i}",
@@ -378,9 +378,9 @@ def test_search_sort_added_orders_by_library_added_descending(db):
     hits = search(db, embs[0], k=3, sort="added")
     assert len(hits) == 3
     # Ordered: 1_750_000_000 → 1_700_000_000 → 1_600_000_000
-    assert hits[0].path == "embiguity:content:show:2"
-    assert hits[1].path == "embiguity:content:show:3"
-    assert hits[2].path == "embiguity:content:show:1"
+    assert hits[0].path == "media:content:show:2"
+    assert hits[1].path == "media:content:show:3"
+    assert hits[2].path == "media:content:show:1"
 
 
 def test_search_year_filter_excludes_out_of_range_and_nulls(db):

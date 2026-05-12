@@ -137,8 +137,8 @@ def test_index_stream_persists_date_aware_fields(db_path):
         json.dumps(d)
         for d in [
             {
-                "source": "embiguity-content",
-                "doc_id": "embiguity:content:show:1",
+                "source": "media-content",
+                "doc_id": "media:content:show:1",
                 "text": "Show: One Piece (1999)",
                 "mtime": 1_777_000_000.0,
                 # Nested-shape: connector base.Document.metadata.
@@ -148,8 +148,8 @@ def test_index_stream_persists_date_aware_fields(db_path):
                 },
             },
             {
-                "source": "embiguity-content",
-                "doc_id": "embiguity:content:movie:2",
+                "source": "media-content",
+                "doc_id": "media:content:movie:2",
                 "text": "Movie: Spirited Away (2001)",
                 "mtime": 1_777_000_001.0,
                 # Top-level shape (legacy fallback).
@@ -165,8 +165,8 @@ def test_index_stream_persists_date_aware_fields(db_path):
         "SELECT path, library_added_at, release_year FROM files ORDER BY path"
     ).fetchall()
     by_path = {r[0]: (r[1], r[2]) for r in rows}
-    assert by_path["embiguity:content:show:1"] == (1_650_000_000.0, 1999)
-    assert by_path["embiguity:content:movie:2"] == (1_700_000_000.0, 2001)
+    assert by_path["media:content:show:1"] == (1_650_000_000.0, 1999)
+    assert by_path["media:content:movie:2"] == (1_700_000_000.0, 2001)
 
 
 def test_index_stream_skips_bad_release_year(db_path):

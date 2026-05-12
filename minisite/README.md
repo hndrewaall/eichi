@@ -108,7 +108,6 @@ so the public image is whitelabel-able without forking:
 | `SEARCH_DEFAULT_K` | `20` | Default top-K. |
 | `SEARCH_MAX_K` | `100` | Max top-K accepted via query string. |
 | `SEARCH_QUERY_TIMEOUT` | `30` | Per-query wall-clock cap (seconds). |
-| `EMBY_BASE_URL`, `NAVIDROME_BASE_URL`, `KAVITA_BASE_URL` | *(empty)* | Optional deep-link bases for media-source result rows. |
 
 See [`.env.example`](.env.example) for a template.
 
