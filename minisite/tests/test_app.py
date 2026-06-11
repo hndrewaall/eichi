@@ -1344,3 +1344,82 @@ def test_sources_for_role_unknown_returns_empty_set():
     assert search_app.sources_for_role("supersecret") == set()
     assert search_app.sources_for_role("") == set()
 
+
+# ----------------------------------------------------------------------
+# /api/sources endpoint + DB-distinct fallback (source-dropdown fix).
+#
+# Root cause being pinned here: the dropdown used to be built ONLY from
+# the local sources.toml allowlist. On an un-configured instance that
+# config is absent, so SOURCES_BY_ROLE is empty, every role got an empty
+# set, and the dropdown listed nothing — which is exactly the
+# "transcripts disappeared again" symptom (transcripts is a real corpus
+# source but was never in the config). The fix derives the dropdown from
+# a GLOBAL `SELECT DISTINCT source` over the index when no config
+# restricts access, exposed via GET /api/sources.
+# ----------------------------------------------------------------------
+
+
+def test_api_sources_lists_role_allowed_sources(client):
+    """With a populated config, /api/sources mirrors the role allowlist."""
+    r = client.get("/api/sources", headers={"X-Auth-Role": "search-user"})
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["ok"] is True
+    assert sorted(body["sources"]) == sorted(SEARCH_USER_SOURCES)
+    # Sorted for stable dropdown ordering.
+    assert body["sources"] == sorted(body["sources"])
+
+
+def test_api_sources_admin_sees_all(client):
+    r = client.get("/api/sources", headers={"X-Auth-Role": "admin"})
+    assert r.status_code == 200
+    assert set(r.get_json()["sources"]) == set(search_app.ALL_SOURCES)
+
+
+def test_sources_for_role_no_config_falls_back_to_db(monkeypatch):
+    """No local config → expose the global DB distinct-source set.
+
+    This is the single-operator default. Without the fallback the
+    dropdown is empty and every ?source= 403s.
+    """
+    monkeypatch.setattr(search_app, "SOURCES_BY_ROLE", {})
+    monkeypatch.setattr(search_app, "ALL_SOURCES", set())
+    monkeypatch.setattr(
+        search_app,
+        "_read_db_sources",
+        lambda: {"transcripts", "claude-jsonl", "memory"},
+    )
+    # ANY role (no restriction is configured) sees the real corpus.
+    for role in ("search-user", "admin", "anything"):
+        assert search_app.sources_for_role(role) == {
+            "transcripts",
+            "claude-jsonl",
+            "memory",
+        }
+
+
+def test_api_sources_no_config_returns_db_sources(client, monkeypatch):
+    monkeypatch.setattr(search_app, "SOURCES_BY_ROLE", {})
+    monkeypatch.setattr(search_app, "ALL_SOURCES", set())
+    monkeypatch.setattr(
+        search_app,
+        "_read_db_sources",
+        lambda: {"transcripts", "claude-jsonl", "memory"},
+    )
+    r = client.get("/api/sources")
+    assert r.status_code == 200
+    assert r.get_json()["sources"] == ["claude-jsonl", "memory", "transcripts"]
+
+
+def test_admin_wildcard_unions_db_sources(monkeypatch):
+    """Admin wildcard surfaces a freshly-indexed source not yet in config."""
+    monkeypatch.setattr(search_app, "SOURCES_BY_ROLE", {"admin": {"*"}})
+    monkeypatch.setattr(search_app, "ALL_SOURCES", {"declared-source"})
+    monkeypatch.setattr(
+        search_app, "_read_db_sources", lambda: {"declared-source", "new-source"}
+    )
+    assert search_app.sources_for_role("admin") == {
+        "declared-source",
+        "new-source",
+    }
+

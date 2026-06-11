@@ -178,18 +178,72 @@ SOURCES_BY_ROLE: dict[str, set[str]] = (
 )
 
 
+def _read_db_sources() -> set[str]:
+    """Return every distinct ``source`` tag actually present in the index.
+
+    This is the GLOBAL corpus source universe — a ``SELECT DISTINCT
+    source`` over the eichi DB, NOT a facet of the latest result set.
+    The source filter dropdown is populated from this so it lists the
+    real corpus (e.g. ``transcripts``, ``memory``, ``claude-jsonl``)
+    regardless of what any single query happened to return.
+
+    Both ``files`` and ``chunk_meta`` are unioned: ``files`` is the
+    canonical per-document table, but a connector can leave ``chunk_meta``
+    rows whose ``files`` row was pruned, so unioning catches every tag a
+    ``?source=`` filter could legitimately match.
+
+    Opened read-only and closed immediately (the DB is shared with the
+    host eichi CLI / index-tick driver). Any failure (DB missing, table
+    absent, SQL error) returns an empty set — the caller treats that as
+    "no DB-derived sources" and falls back to the configured allowlist.
+    """
+    if not EICHI_DB:
+        return set()
+    try:
+        uri = f"file:{EICHI_DB}?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, timeout=2.0)
+        try:
+            rows = conn.execute(
+                "SELECT source FROM files "
+                "UNION "
+                "SELECT source FROM chunk_meta"
+            ).fetchall()
+        finally:
+            conn.close()
+    except (sqlite3.Error, OSError):
+        return set()
+    return {str(r[0]) for r in rows if r and r[0]}
+
+
 def sources_for_role(role: str) -> set[str]:
     """Return the set of source tags ``role`` is allowed to query.
 
-    Unknown / missing roles → empty set (deny everything). The role
-    parameter is whatever ``X-Auth-Role`` carried; the auth-gate defaults
-    a missing claim to ``search-user`` upstream, so an empty set here
-    means "not even search-user" (e.g. an attacker spoofing a typo'd
-    role header through a misconfigured proxy).
+    Resolution order:
+
+    * If a local ``sources.toml`` config declares any sources/roles
+      (``SOURCES_BY_ROLE`` non-empty), honor the per-role allowlist
+      exactly — admin via the ``"*"`` wildcard expands to ``ALL_SOURCES``,
+      other roles get their explicit ids. This preserves the
+      restricted-access feature for multi-tenant deploys.
+    * If NO config is present (``SOURCES_BY_ROLE`` empty — the
+      single-operator default), there is no restriction to enforce, so
+      every role sees the GLOBAL distinct-source set read straight from
+      the index DB. Without this fallback the source dropdown is empty
+      (and every ``?source=`` 403s) on an un-configured instance, which
+      is the bug the operator hit ("transcripts disappeared again").
+
+    Unknown / missing roles under a populated config → empty set (deny
+    everything).
     """
+    # Un-configured instance: expose the real corpus rather than nothing.
+    if not SOURCES_BY_ROLE:
+        return _read_db_sources()
     allowed = SOURCES_BY_ROLE.get(role, set())
     if "*" in allowed:
-        return set(ALL_SOURCES)
+        # Admin wildcard. Expand to the configured universe UNION whatever
+        # the index actually holds, so a freshly-indexed source that the
+        # operator hasn't yet declared in sources.toml is still reachable.
+        return set(ALL_SOURCES) | _read_db_sources()
     return set(allowed)
 
 
@@ -675,6 +729,25 @@ def index() -> str:
         year_max_ceil=YEAR_MAX_CEIL,
         embedding_model=EMBEDDING_MODEL_LABEL,
     )
+
+
+@app.route("/api/sources")
+def api_sources() -> Any:
+    """Return the source tags this role may filter on, for the dropdown.
+
+    The frontend fetches this ONCE on page load and rebuilds the source
+    ``<select>`` from it. The list is the GLOBAL distinct-source set (see
+    ``sources_for_role`` / ``_read_db_sources``) — NOT derived from the
+    current result set — so a query that returns no hits for a given
+    source never makes that source vanish from the dropdown.
+
+    Honors the same per-role authorisation as ``/api/search``: a
+    restricted role only sees its allowed sources. JSON envelope:
+    ``{"ok": true, "sources": ["claude-jsonl", "memory", ...]}``.
+    """
+    role = (request.headers.get("X-Auth-Role") or "").strip() or "search-user"
+    role_sources = sources_for_role(role)
+    return jsonify({"ok": True, "sources": sorted(role_sources)})
 
 
 def _parse_year(value: str | None, label: str) -> tuple[int | None, str | None]:

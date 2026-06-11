@@ -703,10 +703,54 @@
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Populate the source dropdown from GET /api/sources — the GLOBAL
+  // distinct-source list straight from the index DB, NOT a facet of the
+  // current result set. This is what keeps `transcripts` (and every
+  // other corpus source) in the dropdown regardless of what any single
+  // query returns. The template also server-renders these options, but
+  // fetching on load means a newly-indexed source shows up on the next
+  // page load without a redeploy, and a stale server-side render can't
+  // leave the dropdown empty. We preserve the current/desired selection
+  // (URL ?source= or whatever the user already picked).
+  // ---------------------------------------------------------------------
+  function populateSources(desiredValue) {
+    if (!sourceSelect) return;
+    const want = (desiredValue !== undefined && desiredValue !== null)
+      ? String(desiredValue)
+      : (sourceSelect.value || '');
+    fetch('/api/sources', { cache: 'no-store' })
+      .then((resp) => (resp.ok ? resp.json() : null))
+      .then((json) => {
+        if (!json || json.ok === false || !Array.isArray(json.sources)) return;
+        // Rebuild: leading "any" option, then one per source.
+        const frag = document.createDocumentFragment();
+        const anyOpt = document.createElement('option');
+        anyOpt.value = '';
+        anyOpt.textContent = 'any';
+        frag.appendChild(anyOpt);
+        for (const s of json.sources) {
+          const opt = document.createElement('option');
+          opt.value = String(s);
+          opt.textContent = String(s);
+          frag.appendChild(opt);
+        }
+        sourceSelect.innerHTML = '';
+        sourceSelect.appendChild(frag);
+        // Restore the desired selection if it's a real option; else "any".
+        _setIfOption(sourceSelect, want);
+      })
+      .catch(() => { /* leave the server-rendered options in place */ });
+  }
+
   if (kInput && initialK && /^\d+$/.test(initialK)) {
     kInput.value = initialK;
   }
   _setIfOption(sourceSelect, initialSource);
+  // Refresh the source dropdown from the global distinct-source endpoint,
+  // preserving the URL-derived selection. Runs async; the server-rendered
+  // options stand in until it resolves.
+  populateSources(initialSource);
   if (yearMinInput && initialYearMin) yearMinInput.value = initialYearMin;
   if (yearMaxInput && initialYearMax) yearMaxInput.value = initialYearMax;
   _setIfOption(addedSinceSel, initialAddedSince);
@@ -723,6 +767,7 @@
   window.__searchUI = {
     runQuery,
     scheduleQuery,
+    populateSources,
     mergeResultsDOM,
     renderResultCard,
     highlight,
