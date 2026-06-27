@@ -5,7 +5,7 @@ guidance: install, dev loop, key files, conventions.
 
 Quick reference:
 
-- Install: `uv venv --python 3.11 && uv pip install -e .` (or `make install`).
+- Install: `uv sync` (or `make install`).
 - Tests: `pytest tests/` (or `make test`).
 - Lint: `ruff check src tests` (or `make lint`).
 - CI runs ruff + pytest on Python 3.11 and 3.12.

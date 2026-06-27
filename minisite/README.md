@@ -77,7 +77,7 @@ one on the host first:
 
 ```bash
 cd /path/to/eichi
-uv venv --python 3.11 && uv pip install -e .
+uv sync
 eichi index ~/Documents/notes        # any corpus
 ```
 
