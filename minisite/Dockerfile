@@ -52,7 +52,7 @@ RUN ln -sf /usr/local/bin/python3.11 /usr/bin/python3.11
 ARG APP_UID=1000
 ARG APP_GID=1000
 RUN groupadd --gid ${APP_GID} eichi \
-    && useradd --uid ${APP_UID} --gid ${APP_GID} --no-create-home --shell /bin/sh eichi
+    && useradd --uid ${APP_UID} --gid ${APP_GID} --create-home --shell /bin/sh eichi
 
 # Copy the eichi `bin/eichi` wrapper into the image PATH so an operator
 # `docker exec <container> eichi …` works for debugging. The wrapper
