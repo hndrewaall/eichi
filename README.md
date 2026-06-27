@@ -57,8 +57,7 @@ host instead.
 ```sh
 git clone <repo-url> eichi
 cd eichi
-uv venv --python 3.11
-uv pip install -e .
+uv sync
 
 # index some notes (first run downloads the embedding model, ~400 MB)
 eichi index ~/Documents/notes
@@ -67,8 +66,10 @@ eichi index ~/Documents/notes
 eichi query 'how did I decide to ship the new logging pipeline?' -k 5
 ```
 
-If you don't use [uv](https://github.com/astral-sh/uv), `python -m venv .venv
-&& . .venv/bin/activate && pip install -e .` works too.
+`uv sync` creates the venv and installs eichi from the committed
+`uv.lock`. If you don't use [uv](https://github.com/astral-sh/uv),
+`python -m venv .venv && . .venv/bin/activate && pip install -e .` works
+too.
 
 ## Subcommands
 

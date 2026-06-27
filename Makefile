@@ -1,10 +1,10 @@
 .PHONY: install test lint all serve-minisite minisite-build minisite-down clean
 
-# Bootstrap a Python 3.11 venv with eichi installed in editable mode.
-# Idempotent — re-running just re-resolves deps in the existing venv.
+# Bootstrap a venv with eichi installed in editable mode, resolved from
+# the committed uv.lock. Idempotent — re-running just re-syncs the venv
+# to the lockfile.
 install:
-	uv venv --python 3.11
-	uv pip install -e .
+	uv sync
 
 # Run the pytest suite.
 test:

@@ -24,8 +24,7 @@ jobs:
 
       - name: Create venv and install
         run: |
-          uv venv --python ${{ matrix.python-version }} .venv
-          uv pip install -p .venv/bin/python -e .
+          uv sync --python ${{ matrix.python-version }}
           uv pip install -p .venv/bin/python pytest ruff
 
       - name: Lint (ruff)

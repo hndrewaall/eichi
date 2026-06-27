@@ -33,7 +33,13 @@ WORKDIR /app
 # flask + gunicorn — that's the entire container-side dep set. The
 # eichi query runs under the bind-mounted host venv's interpreter, so
 # the container does not need ML deps installed.
-RUN pip install --no-cache-dir \
+#
+# Install with uv (no bootstrap pip): pull the static uv binary from the
+# official Astral image, then `uv pip install --system` into the slim
+# image's interpreter. Keeps the toolchain consistent with the rest of
+# the project (pyproject + uv.lock + Makefile/CI all use uv).
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+RUN uv pip install --system --no-cache \
     flask==3.0.3 \
     gunicorn==23.0.0
 

@@ -8,18 +8,20 @@ extension. Embedding model: `sentence-transformers/all-mpnet-base-v2`
 ## Install
 
 ```bash
-uv venv --python 3.11
-uv pip install -e .
+uv sync
 ```
 
-`pip install -e .` from a stock `python -m venv .venv` also works — the
-project is a pure-Python wheel with `sqlite-vec` and
-`sentence-transformers` as runtime deps.
+`uv sync` creates the venv and installs eichi (editable) plus its deps
+resolved from the committed `uv.lock`. As a fallback without
+[uv](https://github.com/astral-sh/uv), `python -m venv .venv &&
+. .venv/bin/activate && pip install -e .` works too — the project is a
+pure-Python wheel with `sqlite-vec` and `sentence-transformers` as
+runtime deps.
 
 ## Dev loop
 
 ```bash
-make install   # uv venv + uv pip install -e . (one-time bootstrap)
+make install   # uv sync — venv + editable install from uv.lock (one-time bootstrap)
 make test      # pytest tests/
 make lint      # ruff check src tests
 make all       # lint + test
