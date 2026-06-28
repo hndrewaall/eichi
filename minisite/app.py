@@ -72,16 +72,14 @@ try:
 except ImportError:  # pragma: no cover — defensive for partial venvs
     _sources_mod = None  # type: ignore[assignment]
 
-# eichi interpreter + worker script. The interpreter lives in the
-# bind-mounted host venv (see Dockerfile + the docker-compose snippet
-# in the README); the worker script is bundled into the image
-# alongside app.py.
-#
-# Both paths MUST be provided by the operator via env vars — there is
-# no sensible default for a venv path inside a container, and a
-# silent fallback would mask deployment bugs. EICHI_DB falls back to
-# eichi's own default-resolution rules (see eichi.store.default_db_path)
-# if unset.
+# eichi interpreter + worker script. Since the Dockerfile now installs
+# eichi + its ML deps directly, the default EICHI_PYTHON is the
+# container's own python (sys.executable). An operator can still
+# override via env var to point at a different interpreter if desired.
+# EICHI_DB falls back to eichi's own default-resolution rules (see
+# eichi.store.default_db_path) if unset.
+import sys
+
 EICHI_PYTHON = os.environ.get("EICHI_PYTHON")
 EICHI_DB = os.environ.get("EICHI_DB", "")
 WORKER_SCRIPT = os.environ.get("EICHI_WORKER", "/app/eichi_worker.py")
@@ -92,6 +90,10 @@ WORKER_SCRIPT = os.environ.get("EICHI_WORKER", "/app/eichi_worker.py")
 # should set ``EICHI_*``.
 if not EICHI_PYTHON:
     EICHI_PYTHON = os.environ.get("VSEARCH_PYTHON", "")
+if not EICHI_PYTHON:
+    # Default to the container's own python — eichi deps are installed
+    # in the image, no external venv needed.
+    EICHI_PYTHON = sys.executable
 if not EICHI_DB:
     EICHI_DB = os.environ.get("VSEARCH_DB", "")
 
